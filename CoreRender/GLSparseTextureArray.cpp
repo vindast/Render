@@ -22,12 +22,12 @@ CoreRender::GLSparseTexture2DArray::GLSparseTexture2DArray(int iWidth, int iHeig
 
 	if (iWidth <= 0 || iHeight <= 0)
 	{
-		TException("GLSparseTexture2DArray() : iWidth & iHeight mast be greather then 0");
+		TException("GLSparseTexture2DArray() : iWidth & iHeight must be greather then 0");
 	}
 
 	if (!CL::isPowerOf2(iWidth) || !CL::isPowerOf2(iHeight))
 	{
-		TException("GLSparseTexture2DArray() : iWidth & iHeight mast be the power of 2");
+		TException("GLSparseTexture2DArray() : iWidth & iHeight must be the power of 2");
 	}
 
 	int iMaxResolution = CL::max(iWidth, iHeight);
