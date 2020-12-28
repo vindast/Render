@@ -80,12 +80,10 @@ void CoreRender::GLFBO::clear()
 {
 	if (_iGLFBOid)
 	{ 
-		GLFBOBindControl::bind(_iGLFBOid);
+		GLFBOBindControl::bind(0);
 
 		glDeleteFramebuffers(1, &_iGLFBOid);
 		_iGLFBOid = -1;
-
-		GLFBOBindControl::bind(0);
 	}
 }
 
