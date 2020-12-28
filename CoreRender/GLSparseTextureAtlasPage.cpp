@@ -31,6 +31,8 @@ CoreRender::SparseTextureMipMemory::~SparseTextureMipMemory()
 CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int iHeight, TextureFiltring minFilter, TextureFiltring magFilter, TextureFormat format) :
 	_iWidth(iWidth), _iHeight(iHeight)
 {
+	_glFormat = translateTextureFormat("GLSparseTextureAtlasPage()", format);
+
 	if (!CL::isPowerOf2(iWidth) || !CL::isPowerOf2(iHeight))
 	{
 		TException("GLSparseTextureAtlasPage() : iWidth и iHeight должны быть степенями двойки");
@@ -58,7 +60,7 @@ CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int i
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SPARSE_ARB, GL_TRUE);
 	GLint _nSize = -1;
 
-	glGetInternalformativ(GL_TEXTURE_2D, GL_RGBA8, GL_NUM_VIRTUAL_PAGE_SIZES_ARB, 1, &_nSize);
+	glGetInternalformativ(GL_TEXTURE_2D, _glFormat.internalFormat, GL_NUM_VIRTUAL_PAGE_SIZES_ARB, 1, &_nSize);
 
 	if (!_nSize)
 	{
@@ -67,8 +69,8 @@ CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int i
 
 	glTexParameteri(GL_TEXTURE_2D, GL_VIRTUAL_PAGE_SIZE_INDEX_ARB, 0);
 
-	glGetInternalformativ(GL_TEXTURE_2D, GL_RGBA8, GL_VIRTUAL_PAGE_SIZE_X_ARB, 1, &_iPageSizeX);
-	glGetInternalformativ(GL_TEXTURE_2D, GL_RGBA8, GL_VIRTUAL_PAGE_SIZE_Y_ARB, 1, &_iPageSizeY);
+	glGetInternalformativ(GL_TEXTURE_2D, _glFormat.internalFormat, GL_VIRTUAL_PAGE_SIZE_X_ARB, 1, &_iPageSizeX);
+	glGetInternalformativ(GL_TEXTURE_2D, _glFormat.internalFormat, GL_VIRTUAL_PAGE_SIZE_Y_ARB, 1, &_iPageSizeY);
 
 	if (_iPageSizeX != _iPageSizeY)
 	{
@@ -91,11 +93,17 @@ CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int i
 
 	GLError::cheakMessageLog("GLSparseTextureAtlasPage(): проверка установки параметров текстуры");
 
-	_glFormat = translateTextureFormat("GLSparseTextureAtlasPage()", format);
+
 
 	glTexStorage2D(GL_TEXTURE_2D, _iLevels, _glFormat.internalFormat, OpenGL_4_5_context::getInstance().getMaxTextureResolution(), OpenGL_4_5_context::getInstance().getMaxTextureResolution());
 
 	GLError::cheakMessageLog("GLSparseTextureAtlasPage(): создание виртуальной текстуры glTexStorage2D(...)");
+
+
+	//Вот это вот тут не должно быть
+	_glTextureHandle = glGetTextureHandleARB(_glTextureId); 
+	glMakeTextureHandleResidentARB(_glTextureHandle);
+
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -121,7 +129,7 @@ CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int i
 			tile.iX = x;
 			tile.iY = y;
 
-			freeTiles.push_back(&tile);
+			_freeTiles.push_back(&tile);
 		}
 	}
 
@@ -145,17 +153,17 @@ CoreRender::GLSparseTextureAtlasPage::GLSparseTextureAtlasPage(int iWidth, int i
 	createMipMemory();
 }
 
-bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTexture)
+bool CoreRender::GLSparseTextureAtlasPage::allocateTexture(HSparseTextureAtlasTile& hTexture)
 {
 	bool bAlocated = false;
 
-	if (freeTiles.size() && !hTexture._pTile)
+	if (_freeTiles.size() && !hTexture._pTile)
 	{
 		bAlocated = true;
 
-		auto pTile = freeTiles.begin()();
+		auto pTile = _freeTiles.begin()();
 
-		freeTiles.erase(freeTiles.begin());
+		_freeTiles.erase(_freeTiles.begin());
 
 		pTile->bFree = false;
 
@@ -178,7 +186,7 @@ bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTextu
 					GL_TRUE
 				);
 
-				GLError::cheakMessageLog("GLSparseTextureAtlasPage::alocateTexture(): glTexPageCommitmentARB...");
+				GLError::cheakMessageLog("GLSparseTextureAtlasPage::allocateTexture(): glTexPageCommitmentARB...");
 			}
 
 			_mMipMemory[iLevel].pTileCounter[x][y]++;
@@ -192,7 +200,7 @@ bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTextu
 	return bAlocated;
 }
 
-bool CoreRender::GLSparseTextureAtlasPage::eraseTexture(HSparseTexture& hTexture)
+bool CoreRender::GLSparseTextureAtlasPage::eraseTexture(HSparseTextureAtlasTile& hTexture)
 {
 	bool bErased = false;
 
@@ -226,7 +234,7 @@ bool CoreRender::GLSparseTextureAtlasPage::eraseTexture(HSparseTexture& hTexture
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 
-		freeTiles.push_back(pTile);
+		_freeTiles.push_back(pTile);
 
 		hTexture._pTile = nullptr;
 
@@ -243,7 +251,7 @@ bool CoreRender::GLSparseTextureAtlasPage::eraseTexture(HSparseTexture& hTexture
 //Вернет true, если pData != NULL, hTexture принадлежит этому атласу, iLevel >= 0 и iLevel < количесва мип уровней,
 //иначе false
 
-bool CoreRender::GLSparseTextureAtlasPage::writeMipLevel(const void* pData, const HSparseTexture& hTexture, GLint iLevel)
+bool CoreRender::GLSparseTextureAtlasPage::writeMipLevel(const void* pData, const HSparseTextureAtlasTile& hTexture, GLint iLevel)
 {
 	bool bResult = false;
 
@@ -275,17 +283,17 @@ bool CoreRender::GLSparseTextureAtlasPage::writeMipLevel(const void* pData, cons
 	return bResult;
 }
 
-bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTexture, const void* pData)
+bool CoreRender::GLSparseTextureAtlasPage::allocateTexture(HSparseTextureAtlasTile& hTexture, const void* pData)
 {
 	bool bAlocated = false;
 
-	if (freeTiles.size() && !hTexture._pTile)
+	if (_freeTiles.size() && !hTexture._pTile)
 	{
 		bAlocated = true;
 
-		auto pTile = freeTiles.begin()();
+		auto pTile = _freeTiles.begin()();
 
-		freeTiles.erase(freeTiles.begin());
+		_freeTiles.erase(_freeTiles.begin());
 
 		pTile->bFree = false;
 
@@ -308,7 +316,7 @@ bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTextu
 					GL_TRUE
 				);
 
-				GLError::cheakMessageLog("GLSparseTextureAtlasPage::alocateTexture(): glTexPageCommitmentARB...");
+				GLError::cheakMessageLog("GLSparseTextureAtlasPage::allocateTexture(): glTexPageCommitmentARB...");
 			}
 
 			_mMipMemory[iLevel].pTileCounter[x][y]++;
@@ -328,7 +336,7 @@ bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTextu
 
 		glGenerateMipmap(GL_TEXTURE_2D);
 
-		GLError::cheakMessageLog("GLSparseTextureAtlasPage::alocateTexture(SparseTexture& hTexture, const void* pData): glTexSubImage2D...");
+		GLError::cheakMessageLog("GLSparseTextureAtlasPage::allocateTexture(SparseTexture& hTexture, const void* pData): glTexSubImage2D...");
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -338,11 +346,50 @@ bool CoreRender::GLSparseTextureAtlasPage::alocateTexture(HSparseTexture& hTextu
 	return bAlocated;
 }
 
+bool CoreRender::GLSparseTextureAtlasPage::writeTexture(HSparseTextureAtlasTile& hTexture, const void* pData)
+{
+	bool bResult = false;
+
+	if (hTexture._pTile && hTexture._pTile->_pOwner == this)
+	{
+		bResult = true;
+
+		auto pTile = hTexture._pTile;
+
+		glBindTexture(GL_TEXTURE_2D, _glTextureId);
+
+		glTexSubImage2D(
+			GL_TEXTURE_2D,
+			0,
+			pTile->iX * _pMipLevels[0].x,
+			pTile->iY * _pMipLevels[0].y,
+			_pMipLevels[0].x,
+			_pMipLevels[0].y,
+			_glFormat.baseFormat,
+			_glFormat.type,
+			pData
+		);
+
+		GLError::cheakMessageLog("GLSparseTextureAtlasPage::writeMipLevel(): glTexSubImage2D...");
+
+		glGenerateMipmap(GL_TEXTURE_2D);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	return bResult;
+}
+
 CoreRender::GLSparseTextureAtlasPage::~GLSparseTextureAtlasPage()
 {
 	delete[] _mMipMemory;
 	delete[] _pTiles;
 	delete[] _pMipLevels;
+
+	if (_glTextureHandle)
+	{
+		glMakeTextureHandleNonResidentARB(_glTextureHandle);
+	}
 
 	if (_glTextureId)
 	{

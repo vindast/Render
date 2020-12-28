@@ -35,7 +35,7 @@ namespace CoreRender
 		~SparseTextureMipMemory();
 	};
 
-	struct HSparseTexture final
+	struct HSparseTextureAtlasTile final
 	{  
 		SparseTextureTile* _pTile = nullptr;
 	};
@@ -73,28 +73,36 @@ namespace CoreRender
 		 
 		//Алоцирует текстуру
 		//Вернет true если алокация успешна, иначе false
-		bool alocateTexture(HSparseTexture& hTexture);
+		bool allocateTexture(HSparseTextureAtlasTile& hTexture);
 
 		//Удалит текстуру hTexture из атласа. Высвободит память, которую использовала только hTexture 
 		//Вернет true, если hTexture алоцированно в данном атласе, иначе false 
-		bool eraseTexture(HSparseTexture& hTexture);
+		bool eraseTexture(HSparseTextureAtlasTile& hTexture);
 
 		//Обновляет данные в мип уровне iLevel в текстуре hTexture данными из pData
 		//Предполагается, что pData - корректен
 		//Вернет true, если pData != NULL, hTexture принадлежит этому атласу, iLevel >= 0 и iLevel < количесва мип уровней,
 		//иначе false
-		bool writeMipLevel(const void* pData, const HSparseTexture& hTexture, GLint iLevel);
+		bool writeMipLevel(const void* pData, const HSparseTextureAtlasTile& hTexture, GLint iLevel);
 
 		//Алоцирует текстуру, запишет 0 мип данными из pData, сгенерирует мип уровни 
 		//(нужен для режима совместимости с текущей версией движка, будет выпилено)
 		//Предполагается, что pData - корректен
 		//Вернет true если алокация успешна, иначе false
-		bool alocateTexture(HSparseTexture& hTexture, const void* pData);
+		bool allocateTexture(HSparseTextureAtlasTile& hTexture, const void* pData);
+
+		//Обновит данные в текстуре, сгенерирует мип уровни
+		//(нужен для режима совместимости с текущей версией движка, будет выпилено)
+		//Вернет true если hTexture из этого атласа, иначе false
+		bool writeTexture(HSparseTextureAtlasTile& hTexture, const void* pData);
 
 		~GLSparseTextureAtlasPage();
 
 		GLint getLevels() const;
 		 
+
+		GLuint64 _glTextureHandle = 0;
+
 	private:
 		GLTextureFormat _glFormat;
 		GLuint _glTextureId = -1;
@@ -103,7 +111,7 @@ namespace CoreRender
 		glm::ivec2* _pMipLevels = nullptr; 
 		SparseTextureMipMemory* _mMipMemory = nullptr;
 
-		CL::List<SparseTextureTile*> freeTiles;
+		CL::List<SparseTextureTile*> _freeTiles;
 
 		GLint _iPageSizeX = 0;
 		GLint _iPageSizeY = 0;
