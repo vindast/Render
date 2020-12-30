@@ -121,14 +121,23 @@ void CoreRender::GLFBO::setupRT(const RTdesc& desc, GLenum attacment, const std:
 {
 	if (isArray(desc.type))
 	{
-		glFramebufferTexture3D(
+		/*glFramebufferTexture3D(
 			GL_FRAMEBUFFER,
 			attacment,
 			translateRTType(desc.type),
 			desc.pTexture->_textureId,
 			desc.mip,
 			desc.iLayer
+		);*/
+
+		glFramebufferTextureLayer(
+			GL_FRAMEBUFFER,
+			attacment,
+			desc.pTexture->_textureId,
+			desc.mip,
+			desc.iLayer
 		);
+
 
 		GLError::cheakMessageLog("GLFBO::setupRT(): attach array texture");
 	}
